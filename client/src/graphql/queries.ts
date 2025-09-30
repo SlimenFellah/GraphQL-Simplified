@@ -11,6 +11,19 @@ export const GET_USERS = gql`
       avatar
       bio
       createdAt
+      posts {
+        id
+        title
+        likes
+        published
+        createdAt
+      }
+      comments {
+        id
+        content
+        likes
+        createdAt
+      }
     }
   }
 `;

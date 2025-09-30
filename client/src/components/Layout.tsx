@@ -46,10 +46,24 @@ const NavLinks = styled.div`
 const NavLink = styled(Link)<{ $active?: boolean }>`
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.text};
   text-decoration: none;
-  font-weight: ${({ $active }) => $active ? '600' : '400'};
+  font-weight: 600;
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
   border-radius: ${({ theme }) => theme.borderRadius};
   transition: all 0.2s ease;
+  position: relative;
+  min-width: fit-content;
+
+  /* Create invisible bold text to reserve space */
+  &::before {
+    content: attr(data-text);
+    font-weight: 600;
+    height: 0;
+    visibility: hidden;
+    overflow: hidden;
+    user-select: none;
+    pointer-events: none;
+    display: block;
+  }
 
   &:hover {
     background-color: ${({ theme }) => theme.colors.primary}10;
@@ -77,6 +91,32 @@ const FooterContent = styled.div`
   padding: 0 ${({ theme }) => theme.spacing.lg};
 `;
 
+const FooterSection = styled.div`
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const DeveloperSignature = styled.div`
+  font-size: 0.875rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  margin-top: ${({ theme }) => theme.spacing.md};
+  padding-top: ${({ theme }) => theme.spacing.md};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+const PortfolioLink = styled.a`
+  color: ${({ theme }) => theme.colors.primary};
+  text-decoration: none;
+  font-weight: 600;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -99,22 +139,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             GraphQL Simplified
           </Logo>
           <NavLinks>
-            <NavLink to="/" $active={isActive('/')}>
+            <NavLink to="/" $active={isActive('/')} data-text="Home">
               Home
             </NavLink>
-            <NavLink to="/posts" $active={isActive('/posts')}>
+            <NavLink to="/posts" $active={isActive('/posts')} data-text="Posts">
               Posts
             </NavLink>
-            <NavLink to="/users" $active={isActive('/users')}>
+            <NavLink to="/users" $active={isActive('/users')} data-text="Users">
               Users
             </NavLink>
-            <NavLink to="/playground" $active={isActive('/playground')}>
+            <NavLink to="/playground" $active={isActive('/playground')} data-text="Playground">
               Playground
             </NavLink>
-            <NavLink to="/tutorial" $active={isActive('/tutorial')}>
+            <NavLink to="/tutorial" $active={isActive('/tutorial')} data-text="Tutorial">
               Tutorial
             </NavLink>
-            <NavLink to="/stats" $active={isActive('/stats')}>
+            <NavLink to="/stats" $active={isActive('/stats')} data-text="Stats">
               Stats
             </NavLink>
           </NavLinks>
@@ -125,12 +165,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </Main>
       <Footer>
         <FooterContent>
-          <p>
-            Built with ❤️ using GraphQL, Apollo Server, React, and TypeScript
-          </p>
-          <p>
-            A comprehensive demonstration of GraphQL concepts and best practices
-          </p>
+          <FooterSection>
+            <p>
+              Built with ❤️ using GraphQL, Apollo Server, React, and TypeScript
+            </p>
+            <p>
+              A comprehensive demonstration of GraphQL concepts and best practices
+            </p>
+          </FooterSection>
+          <DeveloperSignature>
+            <p>
+              Developed and maintained by{' '}
+              <PortfolioLink 
+                href="https://www.slimenefellah.dev/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                Slimene Fellah
+              </PortfolioLink>
+            </p>
+            <p>Available for freelance work • Full-Stack Web & AI Developer</p>
+          </DeveloperSignature>
         </FooterContent>
       </Footer>
     </LayoutContainer>

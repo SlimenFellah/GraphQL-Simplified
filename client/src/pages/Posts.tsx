@@ -201,21 +201,29 @@ const ErrorMessage = styled.div`
 `;
 
 const Posts: React.FC = () => {
-  const [filter, setFilter] = useState<PostFilter>({});
-  const [sort, setSort] = useState<PostSort>({
-    field: PostSortField.CREATED_AT,
-    order: SortOrder.DESC
-  });
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [publishedFilter, setPublishedFilter] = useState<boolean | undefined>(undefined);
+  const [sortField, setSortField] = useState<PostSortField>(PostSortField.CREATED_AT);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(SortOrder.DESC);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+
+  const filter: PostFilter = {
+    ...(searchQuery && { search: searchQuery }),
+    ...(selectedTag && { tags: [selectedTag] }),
+    ...(publishedFilter !== undefined && { published: publishedFilter })
+  };
+
+  const sort: PostSort = {
+    field: sortField,
+    order: sortOrder
+  };
 
   const { data, loading, error } = useQuery<{ posts: PostConnection }>(GET_POSTS, {
     variables: {
-      filter: {
-        ...filter,
-        search: searchQuery || undefined
-      },
+      filter,
       sort,
-      pagination: { limit: 10, offset: 0 }
+      pagination: { limit: 20, offset: 0 }
     }
   });
 
@@ -223,36 +231,42 @@ const Posts: React.FC = () => {
   const [unlikePost] = useMutation(UNLIKE_POST);
 
   const handleLike = async (postId: string, currentLikes: number) => {
+    const isLiked = likedPosts.has(postId);
+    
     try {
-      await likePost({
-        variables: { id: postId },
-        optimisticResponse: {
-          likePost: {
-            __typename: 'Post',
-            id: postId,
-            likes: currentLikes + 1
+      if (isLiked) {
+        // Unlike the post
+        await unlikePost({
+          variables: { id: postId },
+          optimisticResponse: {
+            unlikePost: {
+              __typename: 'Post',
+              id: postId,
+              likes: Math.max(0, currentLikes - 1)
+            }
           }
-        }
-      });
-    } catch (error) {
-      console.error('Error liking post:', error);
-    }
-  };
-
-  const handleUnlike = async (postId: string, currentLikes: number) => {
-    try {
-      await unlikePost({
-        variables: { id: postId },
-        optimisticResponse: {
-          unlikePost: {
-            __typename: 'Post',
-            id: postId,
-            likes: Math.max(0, currentLikes - 1)
+        });
+        setLikedPosts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(postId);
+          return newSet;
+        });
+      } else {
+        // Like the post
+        await likePost({
+          variables: { id: postId },
+          optimisticResponse: {
+            likePost: {
+              __typename: 'Post',
+              id: postId,
+              likes: currentLikes + 1
+            }
           }
-        }
-      });
+        });
+        setLikedPosts(prev => new Set(prev).add(postId));
+      }
     } catch (error) {
-      console.error('Error unliking post:', error);
+      console.error('Error toggling like:', error);
     }
   };
 
@@ -285,10 +299,7 @@ const Posts: React.FC = () => {
               value={filter.published?.toString() || ''}
               onChange={(e) => {
                 const value = e.target.value;
-                setFilter(prev => ({
-                  ...prev,
-                  published: value === '' ? undefined : value === 'true'
-                }));
+                setPublishedFilter(value === '' ? undefined : value === 'true');
               }}
             >
               <option value="">All Posts</option>
@@ -302,10 +313,7 @@ const Posts: React.FC = () => {
             <Select
               value={sort.field}
               onChange={(e) => {
-                setSort(prev => ({
-                  ...prev,
-                  field: e.target.value as PostSortField
-                }));
+                setSortField(e.target.value as PostSortField);
               }}
             >
               <option value={PostSortField.CREATED_AT}>Created Date</option>
@@ -320,10 +328,7 @@ const Posts: React.FC = () => {
             <Select
               value={sort.order}
               onChange={(e) => {
-                setSort(prev => ({
-                  ...prev,
-                  order: e.target.value as SortOrder
-                }));
+                setSortOrder(e.target.value as SortOrder);
               }}
             >
               <option value={SortOrder.DESC}>Descending</option>
@@ -365,8 +370,11 @@ const Posts: React.FC = () => {
 
               <PostFooter>
                 <PostActions>
-                  <LikeButton onClick={() => handleLike(post.id, post.likes)}>
-                    ❤️ {post.likes}
+                  <LikeButton 
+                    $liked={likedPosts.has(post.id)}
+                    onClick={() => handleLike(post.id, post.likes)}
+                  >
+                    {likedPosts.has(post.id) ? '❤️' : '🤍'} {post.likes}
                   </LikeButton>
                   <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     {post.comments?.length || 0} comments

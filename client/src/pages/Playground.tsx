@@ -9,7 +9,9 @@ const Container = styled.div`
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 ${({ theme }) => theme.spacing.lg};
-  height: calc(100vh - 200px);
+  min-height: calc(100vh - 300px);
+  display: flex;
+  flex-direction: column;
 `;
 
 const Header = styled.div`
@@ -29,19 +31,25 @@ const PlaygroundContainer = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: ${({ theme }) => theme.spacing.lg};
-  height: 100%;
+  flex: 1;
+  min-height: 600px;
+  overflow: hidden;
 `;
 
 const QuerySection = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 600px;
+  overflow: hidden;
 `;
 
 const ResultSection = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 600px;
+  overflow: hidden;
 `;
 
 const SectionTitle = styled.h3`
@@ -51,6 +59,8 @@ const SectionTitle = styled.h3`
 
 const QueryEditor = styled.textarea`
   flex: 1;
+  min-height: 300px;
+  max-height: 400px;
   padding: ${({ theme }) => theme.spacing.md};
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius};
@@ -58,8 +68,9 @@ const QueryEditor = styled.textarea`
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 14px;
   line-height: 1.5;
-  resize: none;
+  resize: vertical;
   outline: none;
+  overflow-y: auto;
 
   &:focus {
     border-color: ${({ theme }) => theme.colors.primary};
@@ -67,7 +78,9 @@ const QueryEditor = styled.textarea`
 `;
 
 const VariablesEditor = styled.textarea`
-  height: 120px;
+  height: 150px;
+  min-height: 100px;
+  max-height: 200px;
   padding: ${({ theme }) => theme.spacing.md};
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius};
@@ -75,9 +88,10 @@ const VariablesEditor = styled.textarea`
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 14px;
   line-height: 1.5;
-  resize: none;
+  resize: vertical;
   outline: none;
   margin-top: ${({ theme }) => theme.spacing.md};
+  overflow-y: auto;
 
   &:focus {
     border-color: ${({ theme }) => theme.colors.primary};
@@ -88,7 +102,9 @@ const ResultContainer = styled.div`
   flex: 1;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius};
-  overflow: hidden;
+  overflow: auto;
+  min-height: 300px;
+  max-height: 500px;
 `;
 
 const ButtonContainer = styled.div`

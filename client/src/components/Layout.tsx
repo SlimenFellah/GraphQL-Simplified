@@ -157,6 +157,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavLink to="/stats" $active={isActive('/stats')} data-text="Stats">
               Stats
             </NavLink>
+            <NavLink to="/schema" $active={isActive('/schema')} data-text="Schema">
+              Schema
+            </NavLink>
+            <NavLink to="/rest-vs-graphql" $active={isActive('/rest-vs-graphql')} data-text="REST vs GraphQL">
+              REST vs GraphQL
+            </NavLink>
           </NavLinks>
         </Nav>
       </Header>

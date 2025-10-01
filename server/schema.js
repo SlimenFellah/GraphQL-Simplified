@@ -49,6 +49,7 @@ const typeDefs = gql`
     name: String!
     email: String!
     username: String!
+    avatar: String
     bio: String
   }
 

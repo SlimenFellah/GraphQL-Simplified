@@ -1,15 +1,17 @@
 # GraphQL Simplified
 
-A modern, full-stack GraphQL application built with React and Node.js, demonstrating best practices for GraphQL development with a clean, intuitive interface.
+A modern, full-stack GraphQL application built with React and Node.js, demonstrating best practices for GraphQL development with a clean, intuitive interface and PostgreSQL database integration.
 
 ## 🚀 Features
 
 - **Modern GraphQL Server**: Built with Apollo Server and GraphQL
+- **PostgreSQL Database**: Robust data persistence with PostgreSQL
 - **React Frontend**: Modern React application with TypeScript support
 - **Real-time Data**: Efficient data fetching with Apollo Client
 - **Responsive Design**: Beautiful, mobile-first UI with styled-components
 - **Type Safety**: Full TypeScript integration for both frontend and backend
 - **Interactive Playground**: Built-in GraphQL Playground for API exploration
+- **Database Seeding**: Automated database setup with sample data
 
 ## 🛠️ Tech Stack
 
@@ -17,6 +19,8 @@ A modern, full-stack GraphQL application built with React and Node.js, demonstra
 - **Node.js** - Runtime environment
 - **GraphQL** - Query language and runtime
 - **Apollo Server** - GraphQL server implementation
+- **PostgreSQL** - Relational database
+- **pg** - PostgreSQL client for Node.js
 - **JavaScript** - Server-side logic
 
 ### Frontend
@@ -42,7 +46,10 @@ graphql-simplified/
 │   ├── index.js           # Server entry point
 │   ├── schema.js          # GraphQL schema definitions
 │   ├── resolvers.js       # GraphQL resolvers
-│   └── data.js            # Mock data
+│   ├── database.js        # Database connection and utilities
+│   ├── schema.sql         # Database schema definition
+│   └── seed.js            # Database seeding script
+├── .env                   # Environment variables
 └── README.md
 ```
 
@@ -52,6 +59,40 @@ graphql-simplified/
 
 - Node.js (v14 or higher)
 - npm or yarn
+- PostgreSQL (v12 or higher)
+
+### Database Setup
+
+1. **Install PostgreSQL**
+   - Download and install PostgreSQL from [postgresql.org](https://www.postgresql.org/download/)
+   - Make sure PostgreSQL service is running
+
+2. **Configure Environment Variables**
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env
+   ```
+   
+   Update the `.env` file with your database credentials:
+   ```env
+   # Server Configuration
+   PORT=4000
+   NODE_ENV=development
+   
+   # GraphQL Configuration
+   GRAPHQL_ENDPOINT=/graphql
+   GRAPHQL_PLAYGROUND=true
+   
+   # CORS Configuration
+   CORS_ORIGIN=http://localhost:3000
+   
+   # Database Configuration
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_NAME=graphql_simplified
+   DB_USER=postgres
+   DB_PASSWORD=your_postgres_password
+   ```
 
 ### Installation
 
@@ -72,6 +113,16 @@ graphql-simplified/
    cd ../client
    npm install
    ```
+
+4. **Setup the database**
+   ```bash
+   # From the root directory
+   node server/seed.js
+   ```
+   This will:
+   - Create the `graphql_simplified` database if it doesn't exist
+   - Set up the database schema (users, posts, comments tables)
+   - Populate the database with sample data
 
 ### Running the Application
 
@@ -96,10 +147,28 @@ graphql-simplified/
 - `npm run server` - Start the GraphQL server
 - `npm run client` - Start the React development server
 
+### Server Directory
+- `node seed.js` - Initialize and seed the database
+
 ### Client Directory
 - `npm start` - Start development server
 - `npm run build` - Build for production
 - `npm test` - Run tests
+
+## 🗄️ Database Schema
+
+The application uses PostgreSQL with the following main tables:
+
+- **users**: User profiles and authentication data
+- **posts**: Blog posts with content, metadata, and relationships
+- **comments**: Comments on posts with threading support
+
+Key features:
+- UUID primary keys for all entities
+- Foreign key relationships with cascading deletes
+- Automatic timestamp management with triggers
+- Indexed fields for optimal query performance
+- Support for tags, likes, and hierarchical comments
 
 ## 📖 API Documentation
 

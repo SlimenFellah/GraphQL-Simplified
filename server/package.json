@@ -24,11 +24,13 @@
   "dependencies": {
     "@apollo/server": "^4.0.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.0.0",
+    "dotenv": "^16.6.1",
     "express": "^4.18.0",
-    "graphql-tag": "^2.12.6"
+    "graphql-tag": "^2.12.6",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
     "nodemon": "^2.0.0"
   }
 }

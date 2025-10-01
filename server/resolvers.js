@@ -1,148 +1,239 @@
-const { users, posts, comments, generateId, getCurrentTimestamp } = require('./data');
+const { pool } = require('./database');
+const { v4: uuidv4 } = require('uuid');
 
 const resolvers = {
   // Query resolvers - how to fetch data
   Query: {
     // User queries
-    users: () => users,
-    user: (_, { id }) => users.find(user => user.id === id),
-    userByUsername: (_, { username }) => users.find(user => user.username === username),
+    users: async () => {
+      const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
+      return result.rows.map(user => ({
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      }));
+    },
+    
+    user: async (_, { id }) => {
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+      if (result.rows.length === 0) return null;
+      const user = result.rows[0];
+      return {
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      };
+    },
+    
+    userByUsername: async (_, { username }) => {
+      const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+      if (result.rows.length === 0) return null;
+      const user = result.rows[0];
+      return {
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      };
+    },
 
     // Post queries with filtering, sorting, and pagination
-    posts: (_, { filter, sort, pagination }) => {
-      let filteredPosts = [...posts];
+    posts: async (_, { filter, sort, pagination }) => {
+      let baseQuery = 'FROM posts';
+      let conditions = [];
+      let params = [];
+      let paramIndex = 1;
 
       // Apply filters
       if (filter) {
         if (filter.published !== undefined) {
-          filteredPosts = filteredPosts.filter(post => post.published === filter.published);
+          conditions.push(`published = $${paramIndex}`);
+          params.push(filter.published);
+          paramIndex++;
         }
         if (filter.authorId) {
-          filteredPosts = filteredPosts.filter(post => post.authorId === filter.authorId);
+          conditions.push(`author_id = $${paramIndex}`);
+          params.push(filter.authorId);
+          paramIndex++;
         }
         if (filter.tags && filter.tags.length > 0) {
-          filteredPosts = filteredPosts.filter(post => 
-            filter.tags.some(tag => post.tags.includes(tag))
-          );
+          conditions.push(`tags && $${paramIndex}`);
+          params.push(filter.tags);
+          paramIndex++;
         }
         if (filter.search) {
-          const searchLower = filter.search.toLowerCase();
-          filteredPosts = filteredPosts.filter(post => 
-            post.title.toLowerCase().includes(searchLower) ||
-            post.content.toLowerCase().includes(searchLower) ||
-            post.excerpt?.toLowerCase().includes(searchLower)
-          );
+          conditions.push(`(title ILIKE $${paramIndex} OR content ILIKE $${paramIndex} OR excerpt ILIKE $${paramIndex})`);
+          params.push(`%${filter.search}%`);
+          paramIndex++;
         }
       }
 
-      // Apply sorting
-      if (sort) {
-        filteredPosts.sort((a, b) => {
-          let aValue, bValue;
-          switch (sort.field) {
-            case 'CREATED_AT':
-              aValue = new Date(a.createdAt);
-              bValue = new Date(b.createdAt);
-              break;
-            case 'UPDATED_AT':
-              aValue = new Date(a.updatedAt);
-              bValue = new Date(b.updatedAt);
-              break;
-            case 'TITLE':
-              aValue = a.title.toLowerCase();
-              bValue = b.title.toLowerCase();
-              break;
-            case 'LIKES':
-              aValue = a.likes;
-              bValue = b.likes;
-              break;
-            default:
-              aValue = new Date(a.createdAt);
-              bValue = new Date(b.createdAt);
-          }
-
-          if (sort.order === 'ASC') {
-            return aValue > bValue ? 1 : -1;
-          } else {
-            return aValue < bValue ? 1 : -1;
-          }
-        });
+      if (conditions.length > 0) {
+        baseQuery += ' WHERE ' + conditions.join(' AND ');
       }
 
+      // Get total count for pagination
+      const countQuery = 'SELECT COUNT(*) ' + baseQuery;
+      const countResult = await pool.query(countQuery, params);
+      const totalCount = parseInt(countResult.rows[0].count);
+
+      // Build main query with sorting
+      let query = 'SELECT * ' + baseQuery;
+      
+      // Apply sorting
+      let orderBy = 'created_at DESC';
+      if (sort) {
+        const field = sort.field === 'CREATED_AT' ? 'created_at' :
+                     sort.field === 'UPDATED_AT' ? 'updated_at' :
+                     sort.field === 'TITLE' ? 'title' :
+                     sort.field === 'LIKES' ? 'likes' : 'created_at';
+        const order = sort.order === 'ASC' ? 'ASC' : 'DESC';
+        orderBy = `${field} ${order}`;
+      }
+      query += ` ORDER BY ${orderBy}`;
+
       // Apply pagination
-      const totalCount = filteredPosts.length;
       const limit = pagination?.limit || 10;
       const offset = pagination?.offset || 0;
       
-      const paginatedPosts = filteredPosts.slice(offset, offset + limit);
+      query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      params.push(limit, offset);
+
+      const result = await pool.query(query, params);
+      const posts = result.rows.map(post => ({
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      }));
       
       return {
-        posts: paginatedPosts,
+        posts,
         totalCount,
         hasNextPage: offset + limit < totalCount,
         hasPreviousPage: offset > 0
       };
     },
 
-    post: (_, { id }) => posts.find(post => post.id === id),
+    post: async (_, { id }) => {
+      const result = await pool.query('SELECT * FROM posts WHERE id = $1', [id]);
+      if (result.rows.length === 0) return null;
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      };
+    },
     
-    popularPosts: (_, { limit = 5 }) => {
-      return [...posts]
-        .filter(post => post.published)
-        .sort((a, b) => b.likes - a.likes)
-        .slice(0, limit);
+    popularPosts: async (_, { limit = 5 }) => {
+      const result = await pool.query(
+        'SELECT * FROM posts WHERE published = true ORDER BY likes DESC LIMIT $1',
+        [limit]
+      );
+      return result.rows.map(post => ({
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      }));
     },
 
     // Comment queries
-    comments: (_, { postId }) => comments.filter(comment => comment.postId === postId),
-    comment: (_, { id }) => comments.find(comment => comment.id === id),
-
-    // Search queries
-    searchPosts: (_, { query }) => {
-      const searchLower = query.toLowerCase();
-      return posts.filter(post => 
-        post.published && (
-          post.title.toLowerCase().includes(searchLower) ||
-          post.content.toLowerCase().includes(searchLower) ||
-          post.tags.some(tag => tag.toLowerCase().includes(searchLower))
-        )
+    comments: async (_, { postId }) => {
+      const result = await pool.query(
+        'SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at ASC',
+        [postId]
       );
+      return result.rows.map(comment => ({
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      }));
+    },
+    
+    comment: async (_, { id }) => {
+      const result = await pool.query('SELECT * FROM comments WHERE id = $1', [id]);
+      if (result.rows.length === 0) return null;
+      const comment = result.rows[0];
+      return {
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      };
     },
 
-    searchUsers: (_, { query }) => {
-      const searchLower = query.toLowerCase();
-      return users.filter(user => 
-        user.name.toLowerCase().includes(searchLower) ||
-        user.username.toLowerCase().includes(searchLower) ||
-        user.bio?.toLowerCase().includes(searchLower)
+    // Search queries
+    searchPosts: async (_, { query }) => {
+      const result = await pool.query(
+        `SELECT * FROM posts 
+         WHERE published = true 
+         AND (title ILIKE $1 OR content ILIKE $1 OR $2 = ANY(tags))
+         ORDER BY created_at DESC`,
+        [`%${query}%`, query.toLowerCase()]
       );
+      return result.rows.map(post => ({
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      }));
+    },
+
+    searchUsers: async (_, { query }) => {
+      const result = await pool.query(
+        `SELECT * FROM users 
+         WHERE name ILIKE $1 OR username ILIKE $1 OR bio ILIKE $1
+         ORDER BY created_at DESC`,
+        [`%${query}%`]
+      );
+      return result.rows.map(user => ({
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      }));
     },
 
     // Statistics
-    stats: () => {
-      const publishedPosts = posts.filter(post => post.published);
-      const draftPosts = posts.filter(post => !post.published);
-      
+    stats: async () => {
+      const [usersResult, postsResult, commentsResult, publishedResult, draftResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM users'),
+        pool.query('SELECT COUNT(*) FROM posts'),
+        pool.query('SELECT COUNT(*) FROM comments'),
+        pool.query('SELECT COUNT(*) FROM posts WHERE published = true'),
+        pool.query('SELECT COUNT(*) FROM posts WHERE published = false')
+      ]);
+
       // Calculate tag statistics
-      const tagCounts = {};
-      posts.forEach(post => {
-        post.tags.forEach(tag => {
-          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-        });
-      });
+      const tagsResult = await pool.query(`
+        SELECT unnest(tags) as tag, COUNT(*) as count 
+        FROM posts 
+        GROUP BY tag 
+        ORDER BY count DESC 
+        LIMIT 10
+      `);
       
-      const mostPopularTags = Object.entries(tagCounts)
-        .map(([tag, count]) => ({ tag, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
+      const mostPopularTags = tagsResult.rows.map(row => ({
+        tag: row.tag,
+        count: parseInt(row.count)
+      }));
+
+      const totalUsers = parseInt(usersResult.rows[0].count);
+      const totalPosts = parseInt(postsResult.rows[0].count);
 
       return {
-        totalUsers: users.length,
-        totalPosts: posts.length,
-        totalComments: comments.length,
-        publishedPosts: publishedPosts.length,
-        draftPosts: draftPosts.length,
-        averagePostsPerUser: posts.length / users.length,
+        totalUsers,
+        totalPosts,
+        totalComments: parseInt(commentsResult.rows[0].count),
+        publishedPosts: parseInt(publishedResult.rows[0].count),
+        draftPosts: parseInt(draftResult.rows[0].count),
+        averagePostsPerUser: totalUsers > 0 ? totalPosts / totalUsers : 0,
         mostPopularTags
       };
     }
@@ -151,190 +242,326 @@ const resolvers = {
   // Mutation resolvers - how to modify data
   Mutation: {
     // User mutations
-    createUser: (_, { input }) => {
-      const newUser = {
-        id: generateId(),
-        ...input,
-        avatar: `https://i.pravatar.cc/150?img=${users.length + 1}`,
-        createdAt: getCurrentTimestamp()
+    createUser: async (_, { input }) => {
+      // Check if username already exists
+      const existingUser = await pool.query('SELECT id FROM users WHERE username = $1', [input.username]);
+      if (existingUser.rows.length > 0) {
+        throw new Error('Username already exists. Please choose a different username.');
+      }
+
+      // Check if email already exists
+      const existingEmail = await pool.query('SELECT id FROM users WHERE email = $1', [input.email]);
+      if (existingEmail.rows.length > 0) {
+        throw new Error('Email already exists. Please use a different email address.');
+      }
+
+      const result = await pool.query(
+        'INSERT INTO users (name, email, username, avatar, bio) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [input.name, input.email, input.username, input.avatar || `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70) + 1}`, input.bio]
+      );
+      const user = result.rows[0];
+      return {
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
       };
-      users.push(newUser);
-      return newUser;
     },
 
-    updateUser: (_, { id, input }) => {
-      const userIndex = users.findIndex(user => user.id === id);
-      if (userIndex === -1) throw new Error('User not found');
-      
-      users[userIndex] = { ...users[userIndex], ...input };
-      return users[userIndex];
+    updateUser: async (_, { id, input }) => {
+      const result = await pool.query(
+        'UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email), username = COALESCE($4, username), avatar = COALESCE($5, avatar), bio = COALESCE($6, bio) WHERE id = $1 RETURNING *',
+        [id, input.name, input.email, input.username, input.avatar, input.bio]
+      );
+      if (result.rows.length === 0) throw new Error('User not found');
+      const user = result.rows[0];
+      return {
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      };
     },
 
-    deleteUser: (_, { id }) => {
-      const userIndex = users.findIndex(user => user.id === id);
-      if (userIndex === -1) return false;
-      
-      users.splice(userIndex, 1);
-      // Also remove user's posts and comments
-      posts.filter(post => post.authorId === id).forEach(post => {
-        const postIndex = posts.findIndex(p => p.id === post.id);
-        posts.splice(postIndex, 1);
-      });
-      comments.filter(comment => comment.authorId === id).forEach(comment => {
-        const commentIndex = comments.findIndex(c => c.id === comment.id);
-        comments.splice(commentIndex, 1);
-      });
-      
-      return true;
+    deleteUser: async (_, { id }) => {
+      const result = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+      return result.rowCount > 0;
     },
 
     // Post mutations
-    createPost: (_, { input }, context) => {
+    createPost: async (_, { input }, context) => {
       // In a real app, you'd get the current user from context/authentication
-      const authorId = '1'; // Default to first user for demo
+      // For now, get the first user as default author
+      const userResult = await pool.query('SELECT id FROM users LIMIT 1');
+      const authorId = userResult.rows[0]?.id;
       
-      const newPost = {
-        id: generateId(),
-        ...input,
-        authorId,
-        likes: 0,
-        createdAt: getCurrentTimestamp(),
-        updatedAt: getCurrentTimestamp()
+      if (!authorId) throw new Error('No users found. Please create a user first.');
+      
+      const result = await pool.query(
+        'INSERT INTO posts (title, content, excerpt, author_id, tags, published) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [input.title, input.content, input.excerpt, authorId, input.tags || [], input.published || false]
+      );
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
       };
-      posts.push(newPost);
-      return newPost;
     },
 
-    updatePost: (_, { id, input }) => {
-      const postIndex = posts.findIndex(post => post.id === id);
-      if (postIndex === -1) throw new Error('Post not found');
-      
-      posts[postIndex] = { 
-        ...posts[postIndex], 
-        ...input, 
-        updatedAt: getCurrentTimestamp() 
+    updatePost: async (_, { id, input }) => {
+      const result = await pool.query(
+        'UPDATE posts SET title = COALESCE($2, title), content = COALESCE($3, content), excerpt = COALESCE($4, excerpt), tags = COALESCE($5, tags), published = COALESCE($6, published) WHERE id = $1 RETURNING *',
+        [id, input.title, input.content, input.excerpt, input.tags, input.published]
+      );
+      if (result.rows.length === 0) throw new Error('Post not found');
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
       };
-      return posts[postIndex];
     },
 
-    deletePost: (_, { id }) => {
-      const postIndex = posts.findIndex(post => post.id === id);
-      if (postIndex === -1) return false;
-      
-      posts.splice(postIndex, 1);
-      // Also remove post's comments
-      comments.filter(comment => comment.postId === id).forEach(comment => {
-        const commentIndex = comments.findIndex(c => c.id === comment.id);
-        comments.splice(commentIndex, 1);
-      });
-      
-      return true;
+    deletePost: async (_, { id }) => {
+      const result = await pool.query('DELETE FROM posts WHERE id = $1', [id]);
+      return result.rowCount > 0;
     },
 
-    publishPost: (_, { id }) => {
-      const post = posts.find(post => post.id === id);
-      if (!post) throw new Error('Post not found');
-      
-      post.published = true;
-      post.updatedAt = getCurrentTimestamp();
-      return post;
+    publishPost: async (_, { id }) => {
+      const result = await pool.query(
+        'UPDATE posts SET published = true WHERE id = $1 RETURNING *',
+        [id]
+      );
+      if (result.rows.length === 0) throw new Error('Post not found');
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      };
     },
 
-    unpublishPost: (_, { id }) => {
-      const post = posts.find(post => post.id === id);
-      if (!post) throw new Error('Post not found');
-      
-      post.published = false;
-      post.updatedAt = getCurrentTimestamp();
-      return post;
+    unpublishPost: async (_, { id }) => {
+      const result = await pool.query(
+        'UPDATE posts SET published = false WHERE id = $1 RETURNING *',
+        [id]
+      );
+      if (result.rows.length === 0) throw new Error('Post not found');
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      };
     },
 
-    likePost: (_, { id }) => {
-      const post = posts.find(post => post.id === id);
-      if (!post) throw new Error('Post not found');
-      
-      post.likes += 1;
-      return post;
+    likePost: async (_, { id }) => {
+      const result = await pool.query(
+        'UPDATE posts SET likes = likes + 1 WHERE id = $1 RETURNING *',
+        [id]
+      );
+      if (result.rows.length === 0) throw new Error('Post not found');
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      };
     },
 
-    unlikePost: (_, { id }) => {
-      const post = posts.find(post => post.id === id);
-      if (!post) throw new Error('Post not found');
-      
-      post.likes = Math.max(0, post.likes - 1);
-      return post;
+    unlikePost: async (_, { id }) => {
+      const result = await pool.query(
+        'UPDATE posts SET likes = GREATEST(0, likes - 1) WHERE id = $1 RETURNING *',
+        [id]
+      );
+      if (result.rows.length === 0) throw new Error('Post not found');
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      };
     },
 
     // Comment mutations
-    createComment: (_, { input }) => {
+    createComment: async (_, { input }) => {
       // In a real app, you'd get the current user from context/authentication
-      const authorId = '2'; // Default to second user for demo
+      // For now, get the second user as default author
+      const userResult = await pool.query('SELECT id FROM users OFFSET 1 LIMIT 1');
+      const authorId = userResult.rows[0]?.id;
       
-      const newComment = {
-        id: generateId(),
-        ...input,
-        authorId,
-        likes: 0,
-        createdAt: getCurrentTimestamp()
+      if (!authorId) {
+        // Fallback to first user if second doesn't exist
+        const firstUserResult = await pool.query('SELECT id FROM users LIMIT 1');
+        const fallbackAuthorId = firstUserResult.rows[0]?.id;
+        if (!fallbackAuthorId) throw new Error('No users found. Please create a user first.');
+        authorId = fallbackAuthorId;
+      }
+      
+      const result = await pool.query(
+        'INSERT INTO comments (content, author_id, post_id, parent_id) VALUES ($1, $2, $3, $4) RETURNING *',
+        [input.content, authorId, input.postId, input.parentId || null]
+      );
+      const comment = result.rows[0];
+      return {
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
       };
-      comments.push(newComment);
-      return newComment;
     },
 
-    updateComment: (_, { id, content }) => {
-      const comment = comments.find(comment => comment.id === id);
-      if (!comment) throw new Error('Comment not found');
-      
-      comment.content = content;
-      return comment;
+    updateComment: async (_, { id, content }) => {
+      const result = await pool.query(
+        'UPDATE comments SET content = $2 WHERE id = $1 RETURNING *',
+        [id, content]
+      );
+      if (result.rows.length === 0) throw new Error('Comment not found');
+      const comment = result.rows[0];
+      return {
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      };
     },
 
-    deleteComment: (_, { id }) => {
-      const commentIndex = comments.findIndex(comment => comment.id === id);
-      if (commentIndex === -1) return false;
-      
-      comments.splice(commentIndex, 1);
-      // Also remove replies to this comment
-      comments.filter(comment => comment.parentId === id).forEach(reply => {
-        const replyIndex = comments.findIndex(c => c.id === reply.id);
-        comments.splice(replyIndex, 1);
-      });
-      
-      return true;
+    deleteComment: async (_, { id }) => {
+      const result = await pool.query('DELETE FROM comments WHERE id = $1', [id]);
+      return result.rowCount > 0;
     },
 
-    likeComment: (_, { id }) => {
-      const comment = comments.find(comment => comment.id === id);
-      if (!comment) throw new Error('Comment not found');
-      
-      comment.likes += 1;
-      return comment;
+    likeComment: async (_, { id }) => {
+      const result = await pool.query(
+        'UPDATE comments SET likes = likes + 1 WHERE id = $1 RETURNING *',
+        [id]
+      );
+      if (result.rows.length === 0) throw new Error('Comment not found');
+      const comment = result.rows[0];
+      return {
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      };
     },
 
-    unlikeComment: (_, { id }) => {
-      const comment = comments.find(comment => comment.id === id);
-      if (!comment) throw new Error('Comment not found');
-      
-      comment.likes = Math.max(0, comment.likes - 1);
-      return comment;
+    unlikeComment: async (_, { id }) => {
+      const result = await pool.query(
+        'UPDATE comments SET likes = GREATEST(0, likes - 1) WHERE id = $1 RETURNING *',
+        [id]
+      );
+      if (result.rows.length === 0) throw new Error('Comment not found');
+      const comment = result.rows[0];
+      return {
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      };
     }
   },
 
   // Field resolvers - how to resolve relationships between types
   User: {
-    posts: (user) => posts.filter(post => post.authorId === user.id),
-    comments: (user) => comments.filter(comment => comment.authorId === user.id)
+    posts: async (user) => {
+      const result = await pool.query('SELECT * FROM posts WHERE author_id = $1 ORDER BY created_at DESC', [user.id]);
+      return result.rows.map(post => ({
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      }));
+    },
+    comments: async (user) => {
+      const result = await pool.query('SELECT * FROM comments WHERE author_id = $1 ORDER BY created_at DESC', [user.id]);
+      return result.rows.map(comment => ({
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      }));
+    }
   },
 
   Post: {
-    author: (post) => users.find(user => user.id === post.authorId),
-    comments: (post) => comments.filter(comment => comment.postId === post.id && !comment.parentId)
+    author: async (post) => {
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [post.authorId || post.author_id]);
+      if (result.rows.length === 0) return null;
+      const user = result.rows[0];
+      return {
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      };
+    },
+    comments: async (post) => {
+      const result = await pool.query(
+        'SELECT * FROM comments WHERE post_id = $1 AND parent_id IS NULL ORDER BY created_at ASC',
+        [post.id]
+      );
+      return result.rows.map(comment => ({
+        ...comment,
+        authorId: comment.author_id,
+        postId: comment.post_id,
+        parentId: comment.parent_id,
+        createdAt: comment.created_at.toISOString(),
+        updatedAt: comment.updated_at.toISOString()
+      }));
+    }
   },
 
   Comment: {
-    author: (comment) => users.find(user => user.id === comment.authorId),
-    post: (comment) => posts.find(post => post.id === comment.postId),
-    replies: (comment) => comments.filter(reply => reply.parentId === comment.id)
+    author: async (comment) => {
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [comment.authorId || comment.author_id]);
+      if (result.rows.length === 0) return null;
+      const user = result.rows[0];
+      return {
+        ...user,
+        createdAt: user.created_at.toISOString(),
+        updatedAt: user.updated_at.toISOString()
+      };
+    },
+    post: async (comment) => {
+      const result = await pool.query('SELECT * FROM posts WHERE id = $1', [comment.postId || comment.post_id]);
+      if (result.rows.length === 0) return null;
+      const post = result.rows[0];
+      return {
+        ...post,
+        authorId: post.author_id,
+        createdAt: post.created_at.toISOString(),
+        updatedAt: post.updated_at.toISOString()
+      };
+    },
+    replies: async (comment) => {
+      const result = await pool.query(
+        'SELECT * FROM comments WHERE parent_id = $1 ORDER BY created_at ASC',
+        [comment.id]
+      );
+      return result.rows.map(reply => ({
+        ...reply,
+        authorId: reply.author_id,
+        postId: reply.post_id,
+        parentId: reply.parent_id,
+        createdAt: reply.created_at.toISOString(),
+        updatedAt: reply.updated_at.toISOString()
+      }));
+    }
   }
 };
 

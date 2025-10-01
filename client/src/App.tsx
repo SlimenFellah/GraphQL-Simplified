@@ -24,6 +24,8 @@ import UserDetail from './pages/UserDetail';
 import GraphQLPlayground from './pages/Playground';
 import Tutorial from './pages/Tutorial';
 import Stats from './pages/Stats';
+import SchemaExplorer from './pages/SchemaExplorer';
+import RestVsGraphQL from './pages/RestVsGraphQL';
 
 function App() {
   return (
@@ -41,6 +43,8 @@ function App() {
               <Route path="/playground" element={<GraphQLPlayground />} />
               <Route path="/tutorial" element={<Tutorial />} />
               <Route path="/stats" element={<Stats />} />
+              <Route path="/schema" element={<SchemaExplorer />} />
+            <Route path="/rest-vs-graphql" element={<RestVsGraphQL />} />
             </Routes>
           </Layout>
         </Router>

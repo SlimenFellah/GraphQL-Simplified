@@ -208,6 +208,15 @@ const SuccessMessage = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.md};
 `;
 
+const UserErrorMessage = styled.div`
+  color: ${({ theme }) => theme.colors.error};
+  background-color: ${({ theme }) => theme.colors.error}10;
+  padding: ${({ theme }) => theme.spacing.md};
+  border-radius: ${({ theme }) => theme.borderRadius};
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+  border: 1px solid ${({ theme }) => theme.colors.error}30;
+`;
+
 const Users: React.FC = () => {
   const [formData, setFormData] = useState<CreateUserInput>({
     name: '',
@@ -217,6 +226,7 @@ const Users: React.FC = () => {
     avatar: ''
   });
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { data, loading, error, refetch } = useQuery<{ users: User[] }>(GET_USERS);
   const [createUser, { loading: creating }] = useMutation(CREATE_USER);
@@ -238,9 +248,14 @@ const Users: React.FC = () => {
       });
       setFormData({ name: '', email: '', username: '', bio: '', avatar: '' });
       setSuccessMessage('User created successfully!');
+      setErrorMessage(''); // Clear any previous errors
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating user:', error);
+      const errorMsg = error.message || 'An error occurred while creating the user.';
+      setErrorMessage(errorMsg);
+      setSuccessMessage(''); // Clear any success messages
+      setTimeout(() => setErrorMessage(''), 5000); // Auto-dismiss after 5 seconds
     }
   };
 
@@ -257,6 +272,7 @@ const Users: React.FC = () => {
       <CreateUserSection>
         <h3 style={{ marginBottom: '1rem' }}>Create New User</h3>
         {successMessage && <SuccessMessage>{successMessage}</SuccessMessage>}
+        {errorMessage && <UserErrorMessage>{errorMessage}</UserErrorMessage>}
         <CreateUserForm onSubmit={handleSubmit}>
           <FormGroup>
             <Label>Name *</Label>
@@ -314,11 +330,11 @@ const Users: React.FC = () => {
               placeholder="Tell us about yourself..."
             />
           </FormGroup>
+          
+          <CreateButton type="submit" disabled={creating || !formData.name || !formData.email || !formData.username}>
+            {creating ? 'Creating...' : 'Create User'}
+          </CreateButton>
         </CreateUserForm>
-        
-        <CreateButton type="submit" disabled={creating || !formData.name || !formData.email || !formData.username}>
-          {creating ? 'Creating...' : 'Create User'}
-        </CreateButton>
       </CreateUserSection>
 
       {loading ? (
